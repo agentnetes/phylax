@@ -17,12 +17,12 @@ A laptop restart, wipe or loss no longer means losing your sessions, notes or fi
 |---|---|
 | macOS | `curl -fsSL https://github.com/agentnetes/phylax/releases/latest/download/bootstrap.sh \| bash` |
 | Windows (PowerShell) | `irm https://github.com/agentnetes/phylax/releases/latest/download/bootstrap.ps1 \| iex` |
-| Homebrew | `brew tap agentnetes/phylax https://github.com/agentnetes/phylax && brew install phylax` |
+| Homebrew | `brew tap agentnetes/phylax https://github.com/agentnetes/phylax && brew trust agentnetes/phylax && brew install phylax` |
 | Scoop | `scoop bucket add phylax https://github.com/agentnetes/phylax` then `scoop install phylax` |
 
 Each route ends with `phylax setup`, a guided installer that connects Google Drive, creates your encryption key,
 installs the background schedule and (optionally) a Claude Code status-line indicator.
-The one-liners verify a SHA-256 checksum before installing. Prefer to read first? Download `bootstrap.sh` / `bootstrap.ps1` and run it yourself.
+Newer Homebrew versions refuse third-party taps until you run `brew trust` (as shown above). The one-liners verify a SHA-256 checksum before installing. Prefer to read first? Download `bootstrap.sh` / `bootstrap.ps1` and run it yourself.
 
 > **Save your private key.** Setup creates it on your machine; move it into your password manager and delete the local copy.
 > Without it, encrypted backups cannot be restored. Add an IT recovery key with `phylax add-recipient age1…`.
