@@ -1,8 +1,8 @@
 class Phylax < Formula
   desc "Back up Claude Code context and folders to your own Google Drive, encrypted"
   homepage "https://github.com/agentnetes/phylax"
-  url "https://github.com/agentnetes/phylax/releases/download/v1.0.1/phylax-1.0.1.tar.gz"
-  sha256 "42894929b028c92b2f01d5f8b4947d58bb5e02dd876151e54031ffbe518fa541"
+  url "https://github.com/agentnetes/phylax/releases/download/v1.0.2/phylax-1.0.2.tar.gz"
+  sha256 "3c134482d8513a5ceb9a91aae4d7aaf425f29938334575ad3a360d350bbf2f92"
   license "FSL-1.1-ALv2"
   depends_on "python"
   depends_on "rclone"
