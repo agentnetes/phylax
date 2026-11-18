@@ -65,7 +65,7 @@ Claude memory (`~/.claude/projects/<home>/memory`) and `~/.claude/CLAUDE.md` are
 - **Local state** (`~/.config/phylax`, Windows `%APPDATA%\phylax`) keeps the snapshot map and sync history; it drives the status line and failure alerts.
 - **Restore** needs your private key (kept offline), decrypts a snapshot, fetches only the objects it lists and writes them to a *new* folder.
 
-A product page lives in [`site/index.html`](site/index.html) (self-contained; open it locally).
+Product page: https://agentnetes.github.io/phylax/ (source in [`site/index.html`](site/index.html)).
 
 Open [`docs/architecture.html`](docs/architecture.html) locally for the interactive version (pan, zoom, trace); its source is [`docs/architecture.json`](docs/architecture.json).
 
