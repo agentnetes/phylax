@@ -1,0 +1,300 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "How Phylax backs up your files and metadata",
+    "output": "phylax-architecture.html",
+    "quality_profile": "showcase"
+  },
+  "components": [
+    {
+      "id": "proj",
+      "type": "external",
+      "label": "Your folders",
+      "sublabel": "files + Claude sessions",
+      "pos": [
+        40,
+        250
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "backend",
+      "label": "Phylax CLI",
+      "sublabel": "scan \u00b7 skip secrets",
+      "pos": [
+        250,
+        250
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "enc",
+      "type": "security",
+      "label": "age encryption",
+      "sublabel": "public recipient only",
+      "pos": [
+        460,
+        250
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "rclone",
+      "type": "cloud",
+      "label": "rclone",
+      "sublabel": "drive.file scope",
+      "pos": [
+        670,
+        250
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "drive",
+      "type": "cloud",
+      "label": "Google Drive",
+      "sublabel": "your own account",
+      "pos": [
+        900,
+        250
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "ciphertext"
+    },
+    {
+      "id": "sched",
+      "type": "backend",
+      "label": "Scheduler",
+      "sublabel": "launchd \u00b7 Task Scheduler",
+      "pos": [
+        250,
+        110
+      ],
+      "size": [
+        140,
+        64
+      ],
+      "tag": "every 30 min"
+    },
+    {
+      "id": "prune",
+      "type": "backend",
+      "label": "Retention prune",
+      "sublabel": "14d \u00b7 8w \u00b7 12m",
+      "pos": [
+        670,
+        110
+      ],
+      "size": [
+        150,
+        64
+      ],
+      "tag": "daily \u00b7 weekly \u00b7 monthly"
+    },
+    {
+      "id": "state",
+      "type": "database",
+      "label": "Local state",
+      "sublabel": "~/.config/phylax",
+      "pos": [
+        250,
+        390
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "alerts",
+      "type": "frontend",
+      "label": "Status & alerts",
+      "sublabel": "status line \u00b7 alerts",
+      "pos": [
+        460,
+        390
+      ],
+      "size": [
+        150,
+        64
+      ]
+    },
+    {
+      "id": "restore",
+      "type": "backend",
+      "label": "phylax restore",
+      "sublabel": "to a new folder",
+      "pos": [
+        900,
+        390
+      ],
+      "size": [
+        140,
+        64
+      ]
+    },
+    {
+      "id": "key",
+      "type": "security",
+      "label": "Private key",
+      "sublabel": "kept offline",
+      "pos": [
+        1120,
+        390
+      ],
+      "size": [
+        140,
+        64
+      ]
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "region",
+      "label": "Your machine",
+      "wraps": [
+        "proj",
+        "cli",
+        "enc",
+        "rclone",
+        "sched",
+        "prune",
+        "state",
+        "alerts"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "proj-to-cli",
+      "from": "proj",
+      "to": "cli",
+      "label": "scan",
+      "variant": "emphasis"
+    },
+    {
+      "id": "cli-to-enc",
+      "from": "cli",
+      "to": "enc",
+      "label": "plaintext"
+    },
+    {
+      "id": "enc-to-rclone",
+      "from": "enc",
+      "to": "rclone",
+      "label": "ciphertext"
+    },
+    {
+      "id": "rclone-to-drive",
+      "from": "rclone",
+      "to": "drive",
+      "label": "upload",
+      "variant": "emphasis"
+    },
+    {
+      "id": "sched-to-cli",
+      "from": "sched",
+      "to": "cli",
+      "label": "sync",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 51
+    },
+    {
+      "id": "sched-to-prune",
+      "from": "sched",
+      "to": "prune",
+      "label": "daily",
+      "variant": "dashed"
+    },
+    {
+      "id": "prune-to-rclone",
+      "from": "prune",
+      "to": "rclone",
+      "label": "delete expired",
+      "variant": "dashed",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "cli-to-state",
+      "from": "cli",
+      "to": "state",
+      "label": "snapshot map",
+      "fromSide": "bottom",
+      "toSide": "top",
+      "labelDy": 51
+    },
+    {
+      "id": "state-to-alerts",
+      "from": "state",
+      "to": "alerts",
+      "label": "status",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "drive-to-restore",
+      "from": "drive",
+      "to": "restore",
+      "label": "snapshots + objects",
+      "fromSide": "bottom",
+      "toSide": "top"
+    },
+    {
+      "id": "key-to-restore",
+      "from": "key",
+      "to": "restore",
+      "label": "decrypts",
+      "variant": "security",
+      "fromSide": "left",
+      "toSide": "right"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "Context mode",
+      "items": [
+        "Readable on Drive: CLAUDE.md, manifest.json, sessions-index.json",
+        "encrypted/<project>--claude-backup-<ts>.tar.gz.age holds sessions and memory",
+        "Secret-looking files are never listed"
+      ]
+    },
+    {
+      "dot": "violet",
+      "title": "Full mode",
+      "items": [
+        "files/objects/<sha>.age: one encrypted object per unique content",
+        "files/snapshots/<ts>.json.age: encrypted index, one per change",
+        "Names and contents are unreadable on Drive"
+      ]
+    },
+    {
+      "dot": "amber",
+      "title": "Keys and recovery",
+      "items": [
+        "The machine only holds the public recipient, so it can write but not read",
+        "Restore needs the private key, kept offline",
+        "Optional: git push to your own private repo"
+      ]
+    }
+  ]
+}

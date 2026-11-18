@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Phylax logo">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4F46E5"/><stop offset="1" stop-color="#9333EA"/></linearGradient>
+    <linearGradient id="h" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  </defs>
+  <path d="M128 14 218 46v76c0 56-40 96-90 120C78 218 38 178 38 122V46Z" fill="url(#g)"/>
+  <path d="M128 14 218 46v76c0 56-40 96-90 120C78 218 38 178 38 122V46Z" fill="url(#h)"/>
+  <circle cx="128" cy="118" r="31" fill="none" stroke="#fff" stroke-width="14"/>
+  <path d="M128 66v104" stroke="#fff" stroke-width="14" stroke-linecap="round"/>
+</svg>

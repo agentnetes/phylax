@@ -1,6 +1,17 @@
-# Phylax
+<h1 align="center"><img src="assets/logo-wordmark.svg" alt="Phylax" width="460"></h1>
 
-*Phylax (Φύλαξ) — Greek for “guardian”: it keeps watch over what you've saved.*
+<p align="center"><em>Phylax (Φύλαξ) — Greek for “guardian”: it keeps watch over what you've saved.</em></p>
+
+<p align="center">
+  <a href="https://github.com/agentnetes/phylax/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/agentnetes/phylax/ci.yml?branch=main&label=CI"></a>
+  <a href="https://github.com/agentnetes/phylax/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/agentnetes/phylax?color=6366F1"></a>
+  <a href="LICENSE"><img alt="License: FSL-1.1-ALv2" src="https://img.shields.io/badge/license-FSL--1.1--ALv2-blue"></a>
+  <img alt="Platforms: macOS and Windows" src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey">
+  <img alt="Python 3.10+" src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white">
+  <img alt="Encryption: age" src="https://img.shields.io/badge/encryption-age-8A2BE2">
+  <img alt="Storage: Google Drive" src="https://img.shields.io/badge/storage-Google%20Drive-4285F4?logo=googledrive&logoColor=white">
+  <a href="https://github.com/agentnetes/phylax/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/agentnetes/phylax"></a>
+</p>
 
 Encrypted, scheduled backup of your **Claude Code context** and **project folders** to **your own Google Drive**.
 A laptop restart, wipe or loss no longer means losing your sessions, notes or files. macOS and Windows.
@@ -40,6 +51,21 @@ Choose a mode per project folder:
 | `both` | `full` plus encrypted Claude sessions |
 
 Claude memory (`~/.claude/projects/<home>/memory`) and `~/.claude/CLAUDE.md` are backed up once, encrypted, for the whole machine.
+
+## Architecture
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/architecture-dark.png">
+  <img alt="Architecture: project folders and Claude sessions are scanned by the Phylax CLI, encrypted with age to a public recipient, uploaded by rclone to your Google Drive; the private key stays offline and is only needed to restore" src="docs/architecture.png">
+</picture>
+
+- **Everything is encrypted before upload.** The machine holds only the *public* age recipient, so it can write backups but never read them.
+- **Drive layout, `context` mode:** readable `CLAUDE.md`, `manifest.json`, `sessions-index.json`, plus `encrypted/<project>--claude-backup-<ts>.tar.gz.age`.
+- **Drive layout, `full` mode:** `files/objects/<sha>.age` (one encrypted object per unique content) and `files/snapshots/<ts>.json.age` (encrypted index per change) — names and contents are unreadable.
+- **Local state** (`~/.config/phylax`, Windows `%APPDATA%\phylax`) keeps the snapshot map and sync history; it drives the status line and failure alerts.
+- **Restore** needs your private key (kept offline), decrypts a snapshot, fetches only the objects it lists and writes them to a *new* folder.
+
+Open [`docs/architecture.html`](docs/architecture.html) locally for the interactive version (pan, zoom, trace); its source is [`docs/architecture.json`](docs/architecture.json).
 
 ## Usage
 
