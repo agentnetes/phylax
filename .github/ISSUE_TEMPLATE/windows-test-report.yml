@@ -1,0 +1,47 @@
+name: Windows test report
+description: The Windows scripts are written but not yet tested. Tell us how your run went.
+title: "[Windows] "
+labels: ["windows", "testing"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for testing on Windows. **Do not paste tokens, the age private key (`identity.txt`) or backup contents.**
+        Redact anything sensitive in the output you share.
+  - type: input
+    id: windows
+    attributes: { label: Windows version, placeholder: "Windows 11 23H2 (build 22631)" }
+    validations: { required: true }
+  - type: input
+    id: powershell
+    attributes: { label: "PowerShell version (`$PSVersionTable.PSVersion`)", placeholder: "5.1.22621" }
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: "Phylax version (`phylax version`)", placeholder: "phylax 1.0.0" }
+  - type: dropdown
+    id: route
+    attributes:
+      label: How did you install it?
+      options: ["PowerShell one-liner (irm | iex)", "Scoop", "Manual download", "Other"]
+    validations: { required: true }
+  - type: checkboxes
+    id: steps
+    attributes:
+      label: Which steps worked? (tick what succeeded)
+      options:
+        - label: Installer ran (dependencies via winget)
+        - label: "`phylax setup` completed (Google Drive login, key created)"
+        - label: Scheduled task `phylax-sync` was created and runs
+        - label: First sync completed (`phylax status` shows SYNCED)
+        - label: Status-line widget shows in Claude Code
+        - label: "`phylax doctor` reports no problems"
+        - label: Restore worked (`phylax restore-files`)
+  - type: textarea
+    id: output
+    attributes:
+      label: "Output of `phylax doctor` (redacted) and any error text"
+      render: text
+  - type: textarea
+    id: notes
+    attributes: { label: "What failed or felt wrong? Anything that surprised you?" }
