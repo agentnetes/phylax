@@ -50,7 +50,9 @@ Choose a mode per project folder:
 | `full` | **Every file encrypted** under opaque names with an encrypted index — not even file names are readable |
 | `both` | `full` plus encrypted Claude sessions |
 
-Claude memory (`~/.claude/projects/<home>/memory`) and `~/.claude/CLAUDE.md` are backed up once, encrypted, for the whole machine.
+Machine-wide, once and encrypted: Claude memory (`~/.claude/projects/<home>/memory`), `~/.claude/CLAUDE.md` and the **Claude Desktop config** (`claude_desktop_config.json`, your MCP server setup).
+Only that one Desktop file is copied; the app's cookies, tokens and caches never are, and its chats already live in your Claude account.
+`phylax restore` puts these back in their original places and overwrites what is there, so use `--to` to restore somewhere safe first.
 
 ## Architecture
 

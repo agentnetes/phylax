@@ -172,11 +172,21 @@ def encrypt_tar(paths, prefix, remote, folder, force, mark):
 def backup_one(name, cfg, force):
     encrypt_tar([proj_dir(cfg["workdir"])], name, cfg["remote"], cfg["folder"], force, sdir(name) / "last-backup")
 
+def desktop_config_paths():
+    """Claude Desktop's claude_desktop_config.json (MCP server setup). Only this file: the app's cookies, tokens and caches are never included."""
+    if sys.platform == "darwin": cands = [HOME / "Library/Application Support/Claude/claude_desktop_config.json"]
+    elif IS_WIN:
+        cands = [Path(os.environ.get("APPDATA", HOME / "AppData/Roaming")) / "Claude/claude_desktop_config.json"]
+        local = os.environ.get("LOCALAPPDATA")   # Microsoft Store (MSIX) installs keep AppData under Packages\<id>\LocalCache
+        if local: cands += sorted(Path(local, "Packages").glob("Claude_*/LocalCache/Roaming/Claude/claude_desktop_config.json"))
+    else: cands = [HOME / ".config/Claude/claude_desktop_config.json"]
+    return [p for p in cands if p.is_file()]
+
 def backup_global(c, force):
     first = next(iter(c["projects"].values()), None)
     if not first: return
     mem = HOME / ".claude/projects" / re.sub(r"[^A-Za-z0-9]", "-", str(HOME)) / "memory"
-    encrypt_tar([mem, HOME / ".claude/CLAUDE.md"], "_global", first["remote"], "phylax-global", force, sdir("_global") / "last-backup")
+    encrypt_tar([p for p in [mem, HOME / ".claude/CLAUDE.md", *desktop_config_paths()] if HOME in p.resolve().parents or p == HOME], "_global", first["remote"], "phylax-global", force, sdir("_global") / "last-backup")
 
 def cmd_backup(a):
     c = load(); ps = pick(c, a.project)
@@ -511,6 +521,8 @@ def cmd_doctor(a):
         else: good(f"[{n}] synced {ago(age)} ago ({p.get('mode', 'context')})")
     sch = (subprocess.run(["launchctl", "list", "com.phylax.sync"], capture_output=True).returncode == 0) if sys.platform == "darwin" else (subprocess.run(["schtasks", "/Query", "/TN", "phylax-sync"], capture_output=True).returncode == 0) if IS_WIN else None
     if sch is not None: good("background schedule installed") if sch else bad("background schedule NOT installed", "phylax schedule install")
+    dc = desktop_config_paths()
+    good(f"Claude Desktop config found, included in the encrypted machine-wide backup") if dc else warn("Claude Desktop config not found (skipped)", "fine if you do not use the Claude Desktop app")
     free = shutil.disk_usage(HOME).free; good(f"disk free {human(free)}") if free > 5 * 1024 ** 3 else warn(f"low disk space ({human(free)})", "free some space")
 
 

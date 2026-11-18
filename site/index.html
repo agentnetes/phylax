@@ -172,7 +172,8 @@ footer a{color:var(--mut)}
       <tr><td>both</td><td>Everything in <code>full</code>, plus encrypted Claude sessions.</td><td>Folders where documents and Claude work live together.</td></tr>
     </tbody>
   </table></div>
-  <p style="margin-top:14px">Full mode skips files over 200 MB, temporary files and folders such as <code>node_modules</code>. A first upload over 2 GB needs one approval with <code>--yes</code>. Preview any run with <code>--dry-run</code>.</p>
+  <p style="margin-top:14px">Every sync also backs up, once per machine and encrypted, your Claude memory, <code>~/.claude/CLAUDE.md</code> and the Claude Desktop config (<code>claude_desktop_config.json</code>, your MCP server setup). Desktop chats stay in your Claude account, and the app's cookies and tokens are never copied.</p>
+  <p>Full mode skips files over 200 MB, temporary files and folders such as <code>node_modules</code>. A first upload over 2 GB needs one approval with <code>--yes</code>. Preview any run with <code>--dry-run</code>.</p>
 </section>
 
 <section id="commands" aria-labelledby="h-commands">
