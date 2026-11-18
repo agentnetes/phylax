@@ -1,0 +1,12 @@
+{
+    "version": "@VERSION@",
+    "description": "Back up Claude Code context and folders to your own Google Drive, encrypted",
+    "homepage": "https://github.com/@REPO@",
+    "license": "FSL-1.1-ALv2",
+    "url": "https://github.com/@REPO@/releases/download/v@VERSION@/phylax-@VERSION@.zip",
+    "hash": "@SHA_ZIP@",
+    "extract_dir": "phylax",
+    "depends": ["python", "rclone", "age", "gum", "git"],
+    "bin": [["phylax.cmd", "phylax"]],
+    "post_install": "Write-Host 'Run: phylax setup'"
+}

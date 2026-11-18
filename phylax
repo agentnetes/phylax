@@ -1,0 +1,4 @@
+#!/bin/sh
+# Unix launcher (resolves symlinks so it works when linked into PATH)
+SELF="$0"; [ -L "$SELF" ] && SELF="$(readlink "$SELF")"
+exec python3 "$(cd "$(dirname "$SELF")" && pwd)/phylax.py" "$@"
