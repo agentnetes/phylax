@@ -59,5 +59,5 @@ if gum confirm "Install the team status line (ccstatusline) with the sync indica
     python3 "$KIT/phylax.py" statusline --overwrite
   else python3 "$KIT/phylax.py" statusline; fi
 fi
-gum spin --title "Running first sync…" --show-output -- python3 "$KIT/phylax.py" sync
+gum spin --title "Running first sync…" --show-output -- python3 "$KIT/phylax.py" sync --all
 gum style --border double --padding "0 2" --foreground 2 "Done! Open the menu any time:  $KIT/phylax.sh"

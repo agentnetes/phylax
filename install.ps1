@@ -43,5 +43,5 @@ if ((Have "gh") -and (gum confirm "Create a PRIVATE GitHub repo for this project
 }
 python "$Kit\phylax.py" schedule install
 if (gum confirm "Install the team status line (ccstatusline) with the sync indicator?") { python "$Kit\phylax.py" statusline }
-python "$Kit\phylax.py" sync
+python "$Kit\phylax.py" sync --all
 gum style --border double --padding "0 2" --foreground 2 "Done! Open the menu any time:  $Kit\phylax.ps1"

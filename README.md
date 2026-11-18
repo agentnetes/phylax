@@ -82,6 +82,9 @@ phylax status [-p NAME]                      # dashboard;  phylax watch  for a l
 phylax doctor                                # health check with fixes
 ```
 
+- **Only folders you add are touched.** Phylax acts on tracked folders and nothing else. Run a command inside a tracked folder (or any subfolder) and it acts on that project only; run it anywhere else and writing commands refuse and tell you how to track the folder (`phylax init` inside a folder adds it). Use `-p NAME` for one project or `--all` for every project; the background job always syncs all of them.
+- **Status line:** the `☁ <project> ✓` indicator appears only inside tracked folders. To show a quiet hint elsewhere, set `"statusline_untracked": "hint"` in `~/.config/phylax/config.json`.
+- **Sessions from subfolders:** Claude sessions started in a tracked folder's subfolders (for example `~/work/board/src`) are backed up with it.
 - **Many folders at once:** menu → *Add folders in bulk*, or `phylax discover PARENT`.
 - **Existing folders are safe:** originals are never modified; secret-looking files (`*.pem`, `.env*`, `*.tfstate`, …) are never listed in the readable manifest; `node_modules`, `.venv` and similar are skipped.
 - **Git backup (optional):** `phylax git-init -p NAME` creates a **private** repo on *your* GitHub account and auto-pushes. It refuses folders that already have a remote unless you pass `--use-existing-remote`, and never auto-commits secret-looking files.

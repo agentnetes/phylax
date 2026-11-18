@@ -2,6 +2,7 @@
 """phylax - back up a Claude Code project's context (metadata, git, encrypted sessions) to your own Google Drive.
 Cross-platform (macOS/Windows/Linux), stdlib only. External tools: rclone, age, git (optional)."""
 import argparse, datetime, fnmatch, hashlib, json, os, re, shutil, stat as statmod, subprocess, sys, tarfile, tempfile, time
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -40,6 +41,62 @@ def pick(c, name=None, one=False):
 
 def sdir(name): return STATE / name
 
+def find_project(c, path):
+    """Name of the tracked project whose folder contains `path` (deepest match), else None."""
+    here = Path(path).resolve(); best, depth = None, -1
+    for n, p in c["projects"].items():
+        wd = Path(p["workdir"]).resolve()
+        if (here == wd or wd in here.parents) and len(wd.parts) > depth: best, depth = n, len(wd.parts)
+    return best
+
+def scope(a, c, write):
+    """Projects a command acts on, and whether that was narrowed. -p NAME, else --all, else the tracked project containing the current folder.
+    Outside every tracked folder a writing command refuses when run by a person; the scheduler (no terminal) still gets everything."""
+    if a.project: return pick(c, a.project), True
+    if getattr(a, "all", False): return dict(c["projects"]), False
+    here = find_project(c, Path.cwd())
+    if here:
+        print(f"(this folder belongs to '{here}': acting on it only; use --all for every project)", file=sys.stderr)
+        return {here: c["projects"][here]}, True
+    if write and sys.stdout.isatty():
+        sys.exit(f"This folder is not tracked by Phylax, so nothing was done.\nTracked: {', '.join(c['projects']) or 'none'}\n"
+                 "Track this folder: phylax init   |   one project: -p NAME   |   everything: --all")
+    return dict(c["projects"]), False
+
+def stdin_cwd():
+    """Claude Code's status-line JSON arrives on stdin (via ccstatusline); return its current folder. Never blocks for long."""
+    if sys.stdin is None or sys.stdin.isatty(): return None
+    box = []
+    t = threading.Thread(target=lambda: box.append(sys.stdin.read()), daemon=True); t.start(); t.join(0.5)
+    try: d = json.loads(box[0]) if box else {}
+    except Exception: return None
+    return (d.get("workspace") or {}).get("current_dir") or d.get("cwd")
+
+def session_cwd(d):
+    """The folder a Claude Code session folder belongs to, read from the 'cwd' recorded in its newest transcripts."""
+    for f in sorted(d.glob("*.jsonl"), key=lambda x: x.stat().st_mtime, reverse=True)[:3]:
+        try:
+            with open(f, encoding="utf-8", errors="ignore") as fh:
+                for i, line in enumerate(fh):
+                    if i > 60: break
+                    if '"cwd"' in line:
+                        v = json.loads(line).get("cwd")
+                        if v: return Path(v).resolve()
+        except Exception: continue
+    return None
+
+def session_dirs(workdir):
+    """Claude Code session folders for `workdir` and for sessions started in any of its subfolders."""
+    root = HOME / ".claude/projects"; wd = Path(workdir).resolve(); exact = proj_dir(wd); out = []
+    if not root.exists(): return out
+    for d in sorted(root.iterdir()):
+        if not d.is_dir(): continue
+        if d == exact: out.append(d)
+        elif d.name.startswith(exact.name + "-"):
+            cwd = session_cwd(d)
+            if cwd and wd in cwd.parents: out.append(d)
+    return out
+
 def proj_dir(workdir):  # Claude Code encodes the cwd by replacing every non-alphanumeric char with '-'
     return HOME / ".claude/projects" / re.sub(r"[^A-Za-z0-9]", "-", str(Path(workdir).resolve()))
 
@@ -69,6 +126,7 @@ def cmd_init(a):
     c = json.loads(CFG_FILE.read_text()) if CFG_FILE.exists() else dict(interval_min=30, projects={})
     if "projects" not in c: c = load()
     if a.interval: c["interval_min"] = a.interval
+    a.name = a.name or Path(a.dir).expanduser().resolve().name
     old = c["projects"].get(a.name, {})
     c["projects"][a.name] = dict(workdir=str(Path(a.dir).expanduser().resolve()), remote=a.remote or old.get("remote", "gdrive-phylax"),
                                  folder=a.folder or old.get("folder", f"{a.name}-context"), git_backup=old.get("git_backup", False),
@@ -114,10 +172,10 @@ def sync_one(name, cfg, dry=False, yes=False):
         if mode == "context":  # readable metadata only in context mode; full/both keep Drive fully encrypted
             if (wd / "CLAUDE.md").exists(): shutil.copy(wd / "CLAUDE.md", stage / "CLAUDE.md")
             (stage / "manifest.json").write_text(json.dumps(manifest(wd), indent=1))
-            pd = proj_dir(wd)
-            sess = [dict(session_id=f.stem, bytes=f.stat().st_size, mtime=int(f.stat().st_mtime))
-                    for f in sorted(pd.glob("*.jsonl"))] if pd.exists() else []
-            (stage / "sessions-index.json").write_text(json.dumps(dict(project=pd.name, sessions=sess), indent=1))
+            sdirs = session_dirs(wd)
+            sess = [dict(session_id=f.stem, folder=d.name, bytes=f.stat().st_size, mtime=int(f.stat().st_mtime))
+                    for d in sdirs for f in sorted(d.glob("*.jsonl"))]
+            (stage / "sessions-index.json").write_text(json.dumps(dict(project=proj_dir(wd).name, sessions=sess), indent=1))
         if cfg.get("git_backup") and (wd / ".git").exists():  # never blocks the sync
             try:
                 if subprocess.run(["git", "-C", str(wd), "status", "--porcelain"], capture_output=True, text=True).stdout.strip():
@@ -142,8 +200,8 @@ def sync_one(name, cfg, dry=False, yes=False):
         record(name, "fail"); print(f"[{name}] sync failed: {e}"); alert_failure(name, str(e)); return False
 
 def cmd_sync(a):
-    c = load(); ps = pick(c, a.project); ok = [sync_one(n, p, a.dry_run, a.yes) for n, p in ps.items()]
-    if not a.project and not a.dry_run:  # machine-wide: Claude memory + global CLAUDE.md, once
+    c = load(); ps, scoped = scope(a, c, True); ok = [sync_one(n, p, a.dry_run, a.yes) for n, p in ps.items()]
+    if not scoped and not a.dry_run:  # machine-wide: Claude memory + global CLAUDE.md, once
         try: backup_global(c, force=False)
         except Exception as e: print(f"[global] encrypted backup failed (continuing): {e}")
     if not all(ok): sys.exit(1)
@@ -170,7 +228,7 @@ def encrypt_tar(paths, prefix, remote, folder, force, mark):
     mark.write_text(""); os.utime(mark, (start, start)); print(f"[{prefix}] encrypted backup -> {dest}/{name}")
 
 def backup_one(name, cfg, force):
-    encrypt_tar([proj_dir(cfg["workdir"])], name, cfg["remote"], cfg["folder"], force, sdir(name) / "last-backup")
+    encrypt_tar(session_dirs(cfg["workdir"]), name, cfg["remote"], cfg["folder"], force, sdir(name) / "last-backup")
 
 def desktop_config_paths():
     """Claude Desktop's claude_desktop_config.json (MCP server setup). Only this file: the app's cookies, tokens and caches are never included."""
@@ -189,9 +247,9 @@ def backup_global(c, force):
     encrypt_tar([p for p in [mem, HOME / ".claude/CLAUDE.md", *desktop_config_paths()] if HOME in p.resolve().parents or p == HOME], "_global", first["remote"], "phylax-global", force, sdir("_global") / "last-backup")
 
 def cmd_backup(a):
-    c = load(); ps = pick(c, a.project)
+    c = load(); ps, scoped = scope(a, c, True)
     for n, p in ps.items(): backup_one(n, p, a.force)
-    if not a.project: backup_global(c, a.force)
+    if not scoped: backup_global(c, a.force)
 
 def cmd_restore(a):
     c = load(); ps = pick(c, a.project); to = Path(a.to).expanduser() if a.to else HOME
@@ -214,15 +272,23 @@ def ago(sec):
     sec = max(0, int(sec)); return f"{sec}s" if sec < 60 else f"{sec//60}m" if sec < 3600 else f"{sec//3600}h{(sec%3600)//60:02d}m"
 
 def cmd_status(a):
-    c = load(); ps = pick(c, a.project); iv = c.get("interval_min", 30) * 60
+    c = load(); iv = c.get("interval_min", 30) * 60
+    if a.short and not a.project and not a.all:   # status line: show only inside a tracked folder
+        here = find_project(c, stdin_cwd() or Path.cwd())
+        if not here:
+            if c.get("statusline_untracked") == "hint": print(f"{C['d']}☁ phylax: folder not tracked{C['n']}", end="")
+            return
+        ps, scoped = {here: c["projects"][here]}, True
+    else: ps, scoped = scope(a, c, False)
     rows = [(n, *read_status(n)) for n in ps]; now = time.time()
     if a.json: print(json.dumps({n: dict(state=st, last=ts, age_s=int(now - ts) if ts else None) for n, st, ts in rows})); return
     if a.short:  # aggregate for the status line
         fails = [n for n, st, ts in rows if st == "fail"]; ages = [now - ts for n, st, ts in rows if ts]
-        if not any(ts for _, _, ts in rows): print(f"{C['y']}☁ phylax never{C['n']}", end="")
-        elif fails: print(f"{C['r']}☁ phylax ✗ {','.join(fails)[:24]}{C['n']}", end="")
-        elif any(a_ > iv * 1.5 for a_ in ages) or len(ages) < len(rows): print(f"{C['y']}☁ phylax ⚠ {ago(max(ages))}{C['n']}", end="")
-        else: print(f"{C['g']}☁ phylax ✓ {len(rows)}×{C['n']}{C['d']} {ago(max(ages))}{C['n']}", end="")
+        label = rows[0][0] if len(rows) == 1 else "phylax"; tail = "" if len(rows) == 1 else f" {len(rows)}×"
+        if not any(ts for _, _, ts in rows): print(f"{C['y']}☁ {label} never{C['n']}", end="")
+        elif fails: print(f"{C['r']}☁ {label} ✗ {','.join(fails)[:24] if len(rows) > 1 else 'failed'}{C['n']}", end="")
+        elif any(a_ > iv * 1.5 for a_ in ages) or len(ages) < len(rows): print(f"{C['y']}☁ {label} ⚠ {ago(max(ages))}{C['n']}", end="")
+        else: print(f"{C['g']}☁ {label} ✓{tail}{C['n']}{C['d']} {ago(max(ages))}{C['n']}", end="")
         return
     print(f"{C['b']}{C['c']}☁  phylax → Google Drive{C['n']}  {C['d']}{time.strftime('%H:%M:%S')}  ·  every {c.get('interval_min', 30)} min{C['n']}\n")
     blocks = "▁▂▃▄▅▆▇█"
@@ -234,11 +300,13 @@ def cmd_status(a):
         f = int(min(age / iv, 1) * 20) if ts else 0
         print(f" {C['b']}{n:14}{C['n']} {badge}  {ago(age) + ' ago' if ts else 'never':>10}  {'█'*f}{'░'*(20-f)} {'next in ' + ago(iv - age) if ts and iv > age else 'due':>12}  {spark}")
         print(f" {'':14} {C['d']}{ps[n]['workdir']}  [{ps[n].get('mode', 'context')}]  →  {C['m']}{ps[n]['remote']}:{ps[n]['folder']}{C['n']}")
+    if not scoped and sys.stdout.isatty() and not find_project(c, Path.cwd()):
+        print(f"\n {C['d']}This folder is not tracked by Phylax. Track it with: phylax init{C['n']}")
 
 def cmd_watch(a):
     try:
         while True:
-            sys.stdout.write("\033[H\033[2J"); cmd_status(argparse.Namespace(short=False, json=False, project=a.project))
+            sys.stdout.write("\033[H\033[2J"); cmd_status(argparse.Namespace(short=False, json=False, project=a.project, all=a.all))
             print(f"\n {C['d']}Ctrl+C to quit{C['n']}"); time.sleep(2)
     except KeyboardInterrupt: pass
 
@@ -278,7 +346,7 @@ def cmd_schedule(a):
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>Label</key><string>com.phylax.sync</string>
-<key>ProgramArguments</key><array>{"".join(f"<string>{x}</string>" for x in cmdline + ["sync"])}</array>
+<key>ProgramArguments</key><array>{"".join(f"<string>{x}</string>" for x in cmdline + ["sync", "--all"])}</array>
 <key>EnvironmentVariables</key><dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
 <key>StartInterval</key><integer>{mins*60}</integer><key>RunAtLoad</key><true/>
 <key>StandardOutPath</key><string>{CFG_DIR}/sync.log</string><key>StandardErrorPath</key><string>{CFG_DIR}/sync.log</string>
@@ -287,7 +355,7 @@ def cmd_schedule(a):
         run(["launchctl", "bootstrap", f"gui/{uid}", str(plist)]); print(f"scheduled every {mins} min (launchd)")
     elif IS_WIN:
         if a.action == "remove": subprocess.run(["schtasks", "/Delete", "/TN", "phylax-sync", "/F"]); return print("schedule removed")
-        run(["schtasks", "/Create", "/F", "/SC", "MINUTE", "/MO", str(mins), "/TN", "phylax-sync", "/TR", " ".join(f'"{x}"' for x in cmdline + ["sync"])])
+        run(["schtasks", "/Create", "/F", "/SC", "MINUTE", "/MO", str(mins), "/TN", "phylax-sync", "/TR", " ".join(f'"{x}"' for x in cmdline + ["sync", "--all"])])
         print(f"scheduled every {mins} min (Task Scheduler)")
     else: print(f"Linux: add to crontab:  */{mins} * * * * {py} {me} sync")
 
@@ -557,16 +625,16 @@ def main():
     p = argparse.ArgumentParser(prog="phylax", description="Back up Claude Code project context to your own Google Drive. Multi-project.")
     sp = p.add_subparsers(dest="cmd", required=True)
     def proj(x): x.add_argument("-p", "--project", help="project name (default: all, or the one containing the current folder where noted)"); return x
-    i = sp.add_parser("init", help="add/update a project"); i.add_argument("--name", required=True); i.add_argument("--dir", required=True)
+    i = sp.add_parser("init", help="add/update a project"); i.add_argument("--name", help="default: the folder name"); i.add_argument("--dir", default=".", help="default: the current folder")
     i.add_argument("--remote"); i.add_argument("--folder"); i.add_argument("--interval", type=int)
     i.add_argument("--mode", choices=["context", "full", "both"], help="context=metadata+encrypted sessions (default); full=encrypted copy of all files; both"); i.add_argument("--exclude", action="append", help="glob to skip in full mode (repeatable)"); i.add_argument("--max-file-mb", type=int)
     i.add_argument("--keep-daily", type=int, help="daily snapshots to keep (default 14)"); i.add_argument("--keep-weekly", type=int, help="weekly (default 8)"); i.add_argument("--keep-monthly", type=int, help="monthly (default 12)"); i.set_defaults(f=cmd_init)
     pj = sp.add_parser("projects", help="list or remove projects"); pj.add_argument("action", nargs="?", choices=["list", "remove"], default="list"); pj.add_argument("name", nargs="?"); pj.set_defaults(f=cmd_projects)
-    sy = proj(sp.add_parser("sync")); sy.add_argument("--dry-run", action="store_true", help="full mode: show what would upload"); sy.add_argument("--yes", action="store_true", help="approve a large (>2GB) upload"); sy.set_defaults(f=cmd_sync)
-    b = proj(sp.add_parser("backup")); b.add_argument("--force", action="store_true"); b.set_defaults(f=cmd_backup)
+    sy = proj(sp.add_parser("sync")); sy.add_argument("--all", action="store_true", help="every tracked project"); sy.add_argument("--dry-run", action="store_true", help="full mode: show what would upload"); sy.add_argument("--yes", action="store_true", help="approve a large (>2GB) upload"); sy.set_defaults(f=cmd_sync)
+    b = proj(sp.add_parser("backup")); b.add_argument("--all", action="store_true", help="every tracked project"); b.add_argument("--force", action="store_true"); b.set_defaults(f=cmd_backup)
     r = proj(sp.add_parser("restore")); r.add_argument("--identity", required=True); r.add_argument("--to"); r.set_defaults(f=cmd_restore)
-    st = proj(sp.add_parser("status")); st.add_argument("--short", action="store_true"); st.add_argument("--json", action="store_true"); st.set_defaults(f=cmd_status)
-    proj(sp.add_parser("watch")).set_defaults(f=cmd_watch)
+    st = proj(sp.add_parser("status")); st.add_argument("--all", action="store_true", help="every tracked project"); st.add_argument("--short", action="store_true"); st.add_argument("--json", action="store_true"); st.set_defaults(f=cmd_status)
+    w = proj(sp.add_parser("watch")); w.add_argument("--all", action="store_true"); w.set_defaults(f=cmd_watch)
     rf = proj(sp.add_parser("restore-files", help="restore full-backup files (never over the original unless --force)")); rf.add_argument("--identity", required=True)
     rf.add_argument("--at", help="restore the state as of this date (YYYY-MM-DD)"); rf.add_argument("--snapshots", action="store_true", help="list available restore points"); rf.add_argument("--to"); rf.add_argument("--match", help="only paths containing this text"); rf.add_argument("--list", action="store_true"); rf.add_argument("--force", action="store_true"); rf.set_defaults(f=cmd_restore_files)
     pr = proj(sp.add_parser("prune", help="apply retention now (full mode)")); pr.add_argument("--dry-run", action="store_true"); pr.set_defaults(f=cmd_prune)
